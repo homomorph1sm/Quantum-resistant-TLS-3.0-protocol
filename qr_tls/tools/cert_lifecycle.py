@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import subprocess
 
@@ -24,8 +25,31 @@ class CertificateLifecycleManager:
         self.workdir = workdir
         self.workdir.mkdir(parents=True, exist_ok=True)
 
+    def _ensure_openssl_config(self) -> Path:
+        config_path = self.workdir / "openssl.cnf"
+        if config_path.exists():
+            return config_path
+
+        config_path.write_text(
+            "\n".join(
+                [
+                    "[ req ]",
+                    "distinguished_name = req_distinguished_name",
+                    "prompt = no",
+                    "[ req_distinguished_name ]",
+                    "CN = qr_tls_local",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return config_path
+
     def _run(self, *cmd: str) -> None:
-        subprocess.run(cmd, cwd=self.workdir, check=True, capture_output=True, text=True)
+        env = os.environ.copy()
+        conf = env.get("OPENSSL_CONF")
+        if not conf or not Path(conf).exists():
+            env["OPENSSL_CONF"] = str(self._ensure_openssl_config())
+        subprocess.run(cmd, cwd=self.workdir, check=True, capture_output=True, text=True, env=env)
 
     def initialize_ca(self, cn: str = "QR TLS Test Root CA") -> tuple[Path, Path]:
         ca_key = self.workdir / "ca.key"
