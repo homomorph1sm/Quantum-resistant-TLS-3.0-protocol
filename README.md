@@ -1,6 +1,5 @@
 # Quantum-resistant-TLS-3.0-protocol
 
-> 注意：截至目前（2026），IETF 并不存在名为 **TLS 3.0** 的正式标准；主流生产环境依然是 **TLS 1.3**。
 
 这个仓库新增了一个可运行的 Python TLS 1.3 参考实现（客户端 + 服务端），用于：
 
