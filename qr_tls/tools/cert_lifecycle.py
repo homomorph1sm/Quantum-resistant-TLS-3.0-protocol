@@ -1,23 +1,25 @@
-"""Certificate lifecycle management helpers based on OpenSSL CLI."""
+"""Certificate lifecycle helpers without OpenSSL CLI dependency.
+
+This module creates *project-local* certificate artifacts for testing workflows.
+Artifacts are JSON payloads wrapped in PEM-like markers and signed with a
+standalone MAC primitive, so no OpenSSL command invocation is required.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import base64
+import json
 import os
 from pathlib import Path
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
-import os
 import re
-import shutil
-import subprocess
+import secrets
 
-_ALLOWED_DN = re.compile(r"^[A-Za-z0-9._-]+$")
-_ALLOWED_SAN = re.compile(r"^[A-Za-z0-9._\-:,*]+$")
+from qr_tls.crypto.simple_crypto import sign_message, verify_signature
 
-=======
-import subprocess
+_ALLOWED_DN = re.compile(r"^[A-Za-z0-9._ -]{1,64}$")
+_SAN_ITEM = re.compile(r"^(DNS:[A-Za-z0-9*._-]{1,253}|IP:(?:\d{1,3}\.){3}\d{1,3})$")
 
->>>>>>> main
 
 @dataclass(slots=True)
 class CertBundle:
@@ -31,176 +33,97 @@ class CertBundle:
     client_cert: Path
 
 
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
 class CertificateLifecycleError(RuntimeError):
     """Raised when certificate lifecycle operations fail."""
 
 
 class CertificateLifecycleManager:
-    def __init__(self, workdir: Path, openssl_bin: str = "openssl") -> None:
-        self.workdir = workdir
-        self.workdir.mkdir(parents=True, exist_ok=True)
-        self.openssl_bin = openssl_bin
-
-    def _validate_dn_value(self, value: str, field: str) -> None:
-        if not _ALLOWED_DN.fullmatch(value):
-            raise ValueError(f"invalid {field}: only [A-Za-z0-9._-] allowed")
-
-    def _validate_san_value(self, value: str) -> None:
-        if not _ALLOWED_SAN.fullmatch(value):
-            raise ValueError("invalid san: only [A-Za-z0-9._-:,*] allowed")
-
-    def _run(self, *cmd: str) -> None:
-        if shutil.which(self.openssl_bin) is None:
-            raise CertificateLifecycleError(
-                f"OpenSSL executable '{self.openssl_bin}' not found in PATH. Install OpenSSL or set openssl_bin."
-            )
-        try:
-            subprocess.run((self.openssl_bin, *cmd), cwd=self.workdir, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or "").strip()
-            stdout = (exc.stdout or "").strip()
-            detail = stderr or stdout or str(exc)
-            raise CertificateLifecycleError(f"command failed: {self.openssl_bin} {' '.join(cmd)}\n{detail}") from exc
-
-    def initialize_ca(self, cn: str = "QR_TLS_Test_Root_CA") -> tuple[Path, Path]:
-        self._validate_dn_value(cn, "cn")
-        ca_key = self.workdir / "ca.key"
-        ca_cert = self.workdir / "ca.crt"
-        self._run(
-=======
-class CertificateLifecycleManager:
     def __init__(self, workdir: Path) -> None:
         self.workdir = workdir
         self.workdir.mkdir(parents=True, exist_ok=True)
 
-    def _ensure_openssl_config(self) -> Path:
-        config_path = self.workdir / "openssl.cnf"
-        if config_path.exists():
-            return config_path
+    @staticmethod
+    def _validate_cn(value: str) -> None:
+        if not _ALLOWED_DN.fullmatch(value) or "/" in value or "\n" in value or "\r" in value:
+            raise ValueError(f"Unsafe CN value: {value!r}")
 
-        config_path.write_text(
-            "\n".join(
-                [
-                    "[ req ]",
-                    "distinguished_name = req_distinguished_name",
-                    "prompt = no",
-                    "[ req_distinguished_name ]",
-                    "CN = qr_tls_local",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        return config_path
+    @staticmethod
+    def _validate_san(value: str) -> None:
+        if "\n" in value or "\r" in value:
+            raise ValueError(f"Unsafe SAN value: {value!r}")
+        items = [part.strip() for part in value.split(",") if part.strip()]
+        if not items or any(not _SAN_ITEM.fullmatch(item) for item in items):
+            raise ValueError(f"Unsafe SAN value: {value!r}")
 
-    def _run(self, *cmd: str) -> None:
-        env = os.environ.copy()
-        conf = env.get("OPENSSL_CONF")
-        if not conf or not Path(conf).exists():
-            env["OPENSSL_CONF"] = str(self._ensure_openssl_config())
-        subprocess.run(cmd, cwd=self.workdir, check=True, capture_output=True, text=True, env=env)
+    @staticmethod
+    def _write_private_key(path: Path) -> str:
+        key_material = secrets.token_hex(32)
+        path.write_text(key_material, encoding="utf-8")
+        os.chmod(path, 0o600)
+        return key_material
+
+    @staticmethod
+    def _write_pem_json(path: Path, marker: str, payload: dict[str, str]) -> None:
+        blob = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        b64 = base64.b64encode(blob).decode("ascii")
+        path.write_text(f"-----BEGIN {marker}-----\n{b64}\n-----END {marker}-----\n", encoding="utf-8")
+
+    @staticmethod
+    def _read_pem_json(path: Path, marker: str) -> dict[str, str]:
+        text = path.read_text(encoding="utf-8").strip().splitlines()
+        if len(text) < 3 or text[0] != f"-----BEGIN {marker}-----" or text[-1] != f"-----END {marker}-----":
+            raise CertificateLifecycleError(f"invalid {marker} format: {path}")
+        data = base64.b64decode("".join(text[1:-1]).encode("ascii"))
+        return json.loads(data.decode("utf-8"))
 
     def initialize_ca(self, cn: str = "QR TLS Test Root CA") -> tuple[Path, Path]:
+        self._validate_cn(cn)
         ca_key = self.workdir / "ca.key"
         ca_cert = self.workdir / "ca.crt"
-        self._run(
-            "openssl",
->>>>>>> main
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:3072",
-            "-sha256",
-            "-days",
-            "365",
-            "-nodes",
-            "-keyout",
-            str(ca_key),
-            "-out",
-            str(ca_cert),
-            "-subj",
-            f"/CN={cn}",
-        )
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
-        os.chmod(ca_key, 0o600)
+        key = self._write_private_key(ca_key)
+        payload = {"subject": cn, "issuer": cn, "serial": secrets.token_hex(8)}
+        payload["sig"] = sign_message(key.encode("utf-8"), json.dumps(payload, sort_keys=True).encode("utf-8")).hex()
+        self._write_pem_json(ca_cert, "QR TLS CERT", payload)
         return ca_key, ca_cert
 
     def issue_leaf(self, name: str, san: str, ca_key: Path, ca_cert: Path) -> tuple[Path, Path, Path]:
-        self._validate_dn_value(name, "name")
-        self._validate_san_value(san)
+        self._validate_cn(name)
+        self._validate_san(san)
 
-=======
-        return ca_key, ca_cert
-
-    def issue_leaf(self, name: str, san: str, ca_key: Path, ca_cert: Path) -> tuple[Path, Path, Path]:
->>>>>>> main
         key = self.workdir / f"{name}.key"
         csr = self.workdir / f"{name}.csr"
         cert = self.workdir / f"{name}.crt"
-        extfile = self.workdir / f"{name}.ext"
-        extfile.write_text(
-            "\n".join(
-                [
-                    "basicConstraints=CA:FALSE",
-                    "keyUsage = digitalSignature, keyEncipherment",
-                    "extendedKeyUsage = serverAuth, clientAuth",
-                    f"subjectAltName = {san}",
-                ]
-            ),
-            encoding="utf-8",
-        )
 
-        self._run(
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
-=======
-            "openssl",
->>>>>>> main
-            "req",
-            "-newkey",
-            "rsa:3072",
-            "-nodes",
-            "-keyout",
-            str(key),
-            "-out",
-            str(csr),
-            "-subj",
-            f"/CN={name}",
-        )
-        self._run(
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
-=======
-            "openssl",
->>>>>>> main
-            "x509",
-            "-req",
-            "-in",
-            str(csr),
-            "-CA",
-            str(ca_cert),
-            "-CAkey",
-            str(ca_key),
-            "-CAcreateserial",
-            "-out",
-            str(cert),
-            "-days",
-            "180",
-            "-sha256",
-            "-extfile",
-            str(extfile),
-        )
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
-        os.chmod(key, 0o600)
-        extfile.unlink(missing_ok=True)
+        leaf_key = self._write_private_key(key)
+        csr_payload = {"subject": name, "san": san, "public_hint": leaf_key[:24]}
+        self._write_pem_json(csr, "QR TLS CSR", csr_payload)
+
+        ca_key_material = ca_key.read_text(encoding="utf-8").strip()
+        ca_payload = self._read_pem_json(ca_cert, "QR TLS CERT")
+        cert_payload = {
+            "subject": name,
+            "issuer": str(ca_payload["subject"]),
+            "san": san,
+            "serial": secrets.token_hex(8),
+        }
+        cert_payload["sig"] = sign_message(
+            ca_key_material.encode("utf-8"), json.dumps(cert_payload, sort_keys=True).encode("utf-8")
+        ).hex()
+        self._write_pem_json(cert, "QR TLS CERT", cert_payload)
         return key, csr, cert
 
     def verify_certificate(self, cert: Path, ca_cert: Path) -> None:
-        self._run("verify", "-CAfile", str(ca_cert), str(cert))
-=======
-        return key, csr, cert
+        cert_payload = self._read_pem_json(cert, "QR TLS CERT")
+        ca_payload = self._read_pem_json(ca_cert, "QR TLS CERT")
+        signed = {k: v for k, v in cert_payload.items() if k != "sig"}
+        ca_key_material = (self.workdir / "ca.key").read_text(encoding="utf-8").strip()
 
-    def verify_certificate(self, cert: Path, ca_cert: Path) -> None:
-        self._run("openssl", "verify", "-CAfile", str(ca_cert), str(cert))
->>>>>>> main
+        if cert_payload.get("issuer") != ca_payload.get("subject"):
+            raise CertificateLifecycleError("issuer mismatch")
+        sig = bytes.fromhex(str(cert_payload["sig"]))
+        ok = verify_signature(ca_key_material.encode("utf-8"), json.dumps(signed, sort_keys=True).encode("utf-8"), sig)
+        if not ok:
+            raise CertificateLifecycleError(f"certificate verification failed: {cert}")
 
     def create_bundle(self) -> CertBundle:
         ca_key, ca_cert = self.initialize_ca()
