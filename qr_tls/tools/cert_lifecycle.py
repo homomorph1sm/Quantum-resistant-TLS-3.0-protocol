@@ -5,8 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from pathlib import Path
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
+import os
+import re
+import shutil
 import subprocess
 
+_ALLOWED_DN = re.compile(r"^[A-Za-z0-9._-]+$")
+_ALLOWED_SAN = re.compile(r"^[A-Za-z0-9._\-:,*]+$")
+
+=======
+import subprocess
+
+>>>>>>> main
 
 @dataclass(slots=True)
 class CertBundle:
@@ -20,6 +31,44 @@ class CertBundle:
     client_cert: Path
 
 
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
+class CertificateLifecycleError(RuntimeError):
+    """Raised when certificate lifecycle operations fail."""
+
+
+class CertificateLifecycleManager:
+    def __init__(self, workdir: Path, openssl_bin: str = "openssl") -> None:
+        self.workdir = workdir
+        self.workdir.mkdir(parents=True, exist_ok=True)
+        self.openssl_bin = openssl_bin
+
+    def _validate_dn_value(self, value: str, field: str) -> None:
+        if not _ALLOWED_DN.fullmatch(value):
+            raise ValueError(f"invalid {field}: only [A-Za-z0-9._-] allowed")
+
+    def _validate_san_value(self, value: str) -> None:
+        if not _ALLOWED_SAN.fullmatch(value):
+            raise ValueError("invalid san: only [A-Za-z0-9._-:,*] allowed")
+
+    def _run(self, *cmd: str) -> None:
+        if shutil.which(self.openssl_bin) is None:
+            raise CertificateLifecycleError(
+                f"OpenSSL executable '{self.openssl_bin}' not found in PATH. Install OpenSSL or set openssl_bin."
+            )
+        try:
+            subprocess.run((self.openssl_bin, *cmd), cwd=self.workdir, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            stderr = (exc.stderr or "").strip()
+            stdout = (exc.stdout or "").strip()
+            detail = stderr or stdout or str(exc)
+            raise CertificateLifecycleError(f"command failed: {self.openssl_bin} {' '.join(cmd)}\n{detail}") from exc
+
+    def initialize_ca(self, cn: str = "QR_TLS_Test_Root_CA") -> tuple[Path, Path]:
+        self._validate_dn_value(cn, "cn")
+        ca_key = self.workdir / "ca.key"
+        ca_cert = self.workdir / "ca.crt"
+        self._run(
+=======
 class CertificateLifecycleManager:
     def __init__(self, workdir: Path) -> None:
         self.workdir = workdir
@@ -56,6 +105,7 @@ class CertificateLifecycleManager:
         ca_cert = self.workdir / "ca.crt"
         self._run(
             "openssl",
+>>>>>>> main
             "req",
             "-x509",
             "-newkey",
@@ -71,9 +121,19 @@ class CertificateLifecycleManager:
             "-subj",
             f"/CN={cn}",
         )
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
+        os.chmod(ca_key, 0o600)
         return ca_key, ca_cert
 
     def issue_leaf(self, name: str, san: str, ca_key: Path, ca_cert: Path) -> tuple[Path, Path, Path]:
+        self._validate_dn_value(name, "name")
+        self._validate_san_value(san)
+
+=======
+        return ca_key, ca_cert
+
+    def issue_leaf(self, name: str, san: str, ca_key: Path, ca_cert: Path) -> tuple[Path, Path, Path]:
+>>>>>>> main
         key = self.workdir / f"{name}.key"
         csr = self.workdir / f"{name}.csr"
         cert = self.workdir / f"{name}.crt"
@@ -91,7 +151,10 @@ class CertificateLifecycleManager:
         )
 
         self._run(
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
+=======
             "openssl",
+>>>>>>> main
             "req",
             "-newkey",
             "rsa:3072",
@@ -104,7 +167,10 @@ class CertificateLifecycleManager:
             f"/CN={name}",
         )
         self._run(
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
+=======
             "openssl",
+>>>>>>> main
             "x509",
             "-req",
             "-in",
@@ -122,10 +188,19 @@ class CertificateLifecycleManager:
             "-extfile",
             str(extfile),
         )
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
+        os.chmod(key, 0o600)
+        extfile.unlink(missing_ok=True)
+        return key, csr, cert
+
+    def verify_certificate(self, cert: Path, ca_cert: Path) -> None:
+        self._run("verify", "-CAfile", str(ca_cert), str(cert))
+=======
         return key, csr, cert
 
     def verify_certificate(self, cert: Path, ca_cert: Path) -> None:
         self._run("openssl", "verify", "-CAfile", str(ca_cert), str(cert))
+>>>>>>> main
 
     def create_bundle(self) -> CertBundle:
         ca_key, ca_cert = self.initialize_ca()
