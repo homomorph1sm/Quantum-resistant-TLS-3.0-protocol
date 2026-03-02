@@ -1,52 +1,44 @@
 #!/usr/bin/env python3
-"""Simple TLS 1.3 echo server using extracted qr_tls ssl helpers."""
+"""Simple TLS 1.3 echo server using Python's standard ssl module."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import socket
-import stat
-import sys
-from pathlib import Path
-
-ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
 import ssl
 from typing import Tuple
 
-from qr_tls.ssl_tools import TLSServerConfig, build_server_context
 
+def build_server_context(certfile: str, keyfile: str, cafile: str | None, require_client_cert: bool) -> ssl.SSLContext:
+    """Create a strict TLS 1.3 server context."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_3
+    context.maximum_version = ssl.TLSVersion.TLSv1_3
+    context.load_cert_chain(certfile=certfile, keyfile=keyfile)
 
-def validate_private_key_permissions(key_path: str) -> None:
-    st_mode = os.stat(key_path).st_mode
-    perms = stat.S_IMODE(st_mode)
-    if perms not in (0o400, 0o600):
-        raise PermissionError(f"Insecure private key permissions for {key_path}: {oct(perms)}. Expected 0o400 or 0o600.")
+    if cafile:
+        context.load_verify_locations(cafile=cafile)
+
+    context.verify_mode = ssl.CERT_REQUIRED if require_client_cert else ssl.CERT_NONE
+    context.options |= ssl.OP_NO_COMPRESSION
+    return context
 
 
 def handle_client(conn: ssl.SSLSocket, addr: Tuple[str, int]) -> None:
+    """Read one message and echo back with protocol metadata."""
     data = conn.recv(4096)
     if not data:
         return
 
-    response = f"[tls_version={conn.version()} cipher={conn.cipher()[0]}] ".encode("utf-8") + data
+    response = (
+        f"[tls_version={conn.version()} cipher={conn.cipher()[0]}] ".encode("utf-8") + data
+    )
     conn.sendall(response)
     print(f"[+] {addr} => {data!r}")
 
 
 def serve(host: str, port: int, certfile: str, keyfile: str, cafile: str | None, require_client_cert: bool) -> None:
-    validate_private_key_permissions(keyfile)
-    context = build_server_context(
-        TLSServerConfig(
-            certfile=certfile,
-            keyfile=keyfile,
-            cafile=cafile,
-            require_client_cert=require_client_cert,
-        )
-    )
+    context = build_server_context(certfile, keyfile, cafile, require_client_cert)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -72,7 +64,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cert", required=True, help="Server certificate PEM file")
     parser.add_argument("--key", required=True, help="Server private key PEM file")
     parser.add_argument("--cafile", help="CA file for client cert verification (optional)")
-    parser.add_argument("--require-client-cert", action="store_true", help="Require and verify client certificates")
+    parser.add_argument(
+        "--require-client-cert",
+        action="store_true",
+        help="Require and verify client certificates",
+    )
     return parser.parse_args()
 
 

@@ -15,31 +15,22 @@ class OqsKEM:
         import oqs
 
         kem = oqs.KeyEncapsulation(self.spec.name)
-        try:
-            public_key = kem.generate_keypair()
-            secret_key = kem.export_secret_key()
-            return public_key, secret_key
-        finally:
-            del kem
+        public_key = kem.generate_keypair()
+        secret_key = kem.export_secret_key()
+        return public_key, secret_key
 
     def encapsulate(self, public_key: bytes) -> tuple[bytes, bytes]:
         import oqs
 
         kem = oqs.KeyEncapsulation(self.spec.name)
-        try:
-            ciphertext, shared_secret = kem.encap_secret(public_key)
-            return ciphertext, shared_secret
-        finally:
-            del kem
+        ciphertext, shared_secret = kem.encap_secret(public_key)
+        return ciphertext, shared_secret
 
     def decapsulate(self, secret_key: bytes, ciphertext: bytes) -> bytes:
         import oqs
 
         kem = oqs.KeyEncapsulation(self.spec.name, secret_key=secret_key)
-        try:
-            return kem.decap_secret(ciphertext)
-        finally:
-            del kem
+        return kem.decap_secret(ciphertext)
 
 
 @dataclass(slots=True)
@@ -50,30 +41,21 @@ class OqsSignature:
         import oqs
 
         sig = oqs.Signature(self.spec.name)
-        try:
-            public_key = sig.generate_keypair()
-            secret_key = sig.export_secret_key()
-            return public_key, secret_key
-        finally:
-            del sig
+        public_key = sig.generate_keypair()
+        secret_key = sig.export_secret_key()
+        return public_key, secret_key
 
     def sign(self, secret_key: bytes, message: bytes) -> bytes:
         import oqs
 
         sig = oqs.Signature(self.spec.name, secret_key=secret_key)
-        try:
-            return sig.sign(message)
-        finally:
-            del sig
+        return sig.sign(message)
 
     def verify(self, public_key: bytes, message: bytes, signature: bytes) -> bool:
         import oqs
 
         verifier = oqs.Signature(self.spec.name)
-        try:
-            return verifier.verify(message, signature, public_key)
-        finally:
-            del verifier
+        return verifier.verify(message, signature, public_key)
 
 
 def discover_kems() -> dict[str, OqsKEM]:

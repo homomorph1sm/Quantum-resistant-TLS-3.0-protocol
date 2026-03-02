@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import os
-import re
 import subprocess
-
-_ALLOWED_DN = re.compile(r"^[A-Za-z0-9._-]+$")
-_ALLOWED_SAN = re.compile(r"^[A-Za-z0-9._\-:,*]+$")
 
 
 @dataclass(slots=True)
@@ -24,34 +19,15 @@ class CertBundle:
     client_cert: Path
 
 
-class CertificateLifecycleError(RuntimeError):
-    """Raised when certificate lifecycle operations fail."""
-
-
 class CertificateLifecycleManager:
     def __init__(self, workdir: Path) -> None:
         self.workdir = workdir
         self.workdir.mkdir(parents=True, exist_ok=True)
 
-    def _validate_dn_value(self, value: str, field: str) -> None:
-        if not _ALLOWED_DN.fullmatch(value):
-            raise ValueError(f"invalid {field}: only [A-Za-z0-9._-] allowed")
-
-    def _validate_san_value(self, value: str) -> None:
-        if not _ALLOWED_SAN.fullmatch(value):
-            raise ValueError("invalid san: only [A-Za-z0-9._-:,*] allowed")
-
     def _run(self, *cmd: str) -> None:
-        try:
-            subprocess.run(cmd, cwd=self.workdir, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or "").strip()
-            stdout = (exc.stdout or "").strip()
-            detail = stderr or stdout or str(exc)
-            raise CertificateLifecycleError(f"command failed: {' '.join(cmd)}\n{detail}") from exc
+        subprocess.run(cmd, cwd=self.workdir, check=True, capture_output=True, text=True)
 
-    def initialize_ca(self, cn: str = "QR_TLS_Test_Root_CA") -> tuple[Path, Path]:
-        self._validate_dn_value(cn, "cn")
+    def initialize_ca(self, cn: str = "QR TLS Test Root CA") -> tuple[Path, Path]:
         ca_key = self.workdir / "ca.key"
         ca_cert = self.workdir / "ca.crt"
         self._run(
@@ -71,13 +47,9 @@ class CertificateLifecycleManager:
             "-subj",
             f"/CN={cn}",
         )
-        os.chmod(ca_key, 0o600)
         return ca_key, ca_cert
 
     def issue_leaf(self, name: str, san: str, ca_key: Path, ca_cert: Path) -> tuple[Path, Path, Path]:
-        self._validate_dn_value(name, "name")
-        self._validate_san_value(san)
-
         key = self.workdir / f"{name}.key"
         csr = self.workdir / f"{name}.csr"
         cert = self.workdir / f"{name}.crt"
@@ -126,8 +98,6 @@ class CertificateLifecycleManager:
             "-extfile",
             str(extfile),
         )
-        os.chmod(key, 0o600)
-        extfile.unlink(missing_ok=True)
         return key, csr, cert
 
     def verify_certificate(self, cert: Path, ca_cert: Path) -> None:
