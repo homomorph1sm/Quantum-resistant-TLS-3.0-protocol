@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
 import socket
+=======
+>>>>>>> main
 import subprocess
 import sys
 import time
@@ -24,6 +27,7 @@ class CryptoOperationSuite:
     def __init__(self, repo_root: Path) -> None:
         self.repo_root = repo_root
 
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
     def _wait_for_server_ready(self, host: str, port: int, proc: subprocess.Popen[str], timeout_s: float = 5.0) -> bool:
         deadline = time.time() + timeout_s
         while time.time() < deadline:
@@ -44,6 +48,9 @@ class CryptoOperationSuite:
     def tls_mutual_auth_roundtrip(self, bundle: CertBundle, port: int | None = None) -> CheckResult:
         if port is None:
             port = self._find_free_port()
+=======
+    def tls_mutual_auth_roundtrip(self, bundle: CertBundle, port: int = 10443) -> CheckResult:
+>>>>>>> main
         server_cmd = [
             sys.executable,
             "python_tls13/server.py",
@@ -78,12 +85,16 @@ class CryptoOperationSuite:
 
         proc = subprocess.Popen(server_cmd, cwd=self.repo_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
             if not self._wait_for_server_ready("127.0.0.1", port, proc):
                 stderr = ""
                 if proc.stderr is not None:
                     stderr = proc.stderr.read().strip()
                 return CheckResult("tls_mutual_auth_roundtrip", "FAIL", stderr or "server failed to become ready")
 
+=======
+            time.sleep(0.8)
+>>>>>>> main
             run = subprocess.run(client_cmd, cwd=self.repo_root, capture_output=True, text=True, check=True)
             if "TLSv1.3" not in run.stdout or "selftest_ping" not in run.stdout:
                 return CheckResult("tls_mutual_auth_roundtrip", "FAIL", f"unexpected output: {run.stdout.strip()}")
@@ -91,8 +102,12 @@ class CryptoOperationSuite:
         except subprocess.CalledProcessError as exc:
             return CheckResult("tls_mutual_auth_roundtrip", "FAIL", exc.stderr.strip() or exc.stdout.strip())
         finally:
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
             if proc.poll() is None:
                 proc.kill()
+=======
+            proc.kill()
+>>>>>>> main
             proc.wait(timeout=3)
 
     def pq_kem_tests(self, registry: PQRegistry) -> list[CheckResult]:

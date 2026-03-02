@@ -1,2 +1,9 @@
 __pycache__/
 *.pyc
+<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
+=======
+.idea
+venv/
+.DS_Store
+main
+>>>>>>> main

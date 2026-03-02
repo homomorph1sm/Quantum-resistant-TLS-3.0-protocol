@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from qr_tls.pq import PQRegistry
-from qr_tls.tools.cert_lifecycle import CertificateLifecycleError, CertificateLifecycleManager
+from qr_tls.tools.cert_lifecycle import CertificateLifecycleManager
 from qr_tls.tools.crypto_ops import CheckResult, CryptoOperationSuite
 
 
@@ -19,12 +19,8 @@ class UnifiedSelfTestRunner:
         results: list[CheckResult] = []
         with TemporaryDirectory(prefix="qr_tls_selftest_") as tmp:
             cert_mgr = CertificateLifecycleManager(Path(tmp))
-            try:
-                bundle = cert_mgr.create_bundle()
-                results.append(CheckResult("cert_lifecycle", "PASS", f"issued certs in {tmp}"))
-            except CertificateLifecycleError as exc:
-                results.append(CheckResult("cert_lifecycle", "FAIL", str(exc)))
-                return results
+            bundle = cert_mgr.create_bundle()
+            results.append(CheckResult("cert_lifecycle", "PASS", f"issued certs in {tmp}"))
 
             suite = CryptoOperationSuite(self.repo_root)
             results.append(suite.tls_mutual_auth_roundtrip(bundle))
