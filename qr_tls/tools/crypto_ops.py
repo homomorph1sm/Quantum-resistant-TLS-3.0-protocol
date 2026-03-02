@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import time
@@ -23,7 +24,29 @@ class CryptoOperationSuite:
     def __init__(self, repo_root: Path) -> None:
         self.repo_root = repo_root
 
-    def tls_mutual_auth_roundtrip(self, bundle: CertBundle, port: int = 10443) -> CheckResult:
+    @staticmethod
+    def _wait_for_server_ready(host: str, port: int, proc: subprocess.Popen[str], timeout_s: float = 5.0) -> bool:
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                return False
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(0.25)
+                if sock.connect_ex((host, port)) == 0:
+                    return True
+            time.sleep(0.05)
+        return False
+
+    @staticmethod
+    def _find_free_port() -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            return int(sock.getsockname()[1])
+
+    def tls_mutual_auth_roundtrip(self, bundle: CertBundle, port: int | None = None) -> CheckResult:
+        if port is None:
+            port = self._find_free_port()
+
         server_cmd = [
             sys.executable,
             "python_tls13/server.py",
@@ -58,7 +81,10 @@ class CryptoOperationSuite:
 
         proc = subprocess.Popen(server_cmd, cwd=self.repo_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
-            time.sleep(0.8)
+            if not self._wait_for_server_ready("127.0.0.1", port, proc):
+                stderr = proc.stderr.read().strip() if proc.stderr is not None else ""
+                return CheckResult("tls_mutual_auth_roundtrip", "FAIL", stderr or "server failed to become ready")
+
             run = subprocess.run(client_cmd, cwd=self.repo_root, capture_output=True, text=True, check=True)
             if "TLSv1.3" not in run.stdout or "selftest_ping" not in run.stdout:
                 return CheckResult("tls_mutual_auth_roundtrip", "FAIL", f"unexpected output: {run.stdout.strip()}")
@@ -66,14 +92,15 @@ class CryptoOperationSuite:
         except subprocess.CalledProcessError as exc:
             return CheckResult("tls_mutual_auth_roundtrip", "FAIL", exc.stderr.strip() or exc.stdout.strip())
         finally:
-            proc.kill()
+            if proc.poll() is None:
+                proc.kill()
             proc.wait(timeout=3)
 
     def pq_kem_tests(self, registry: PQRegistry) -> list[CheckResult]:
-        results: list[CheckResult] = []
         if not registry.kems:
             return [CheckResult("pq_kem", "SKIP", "no PQ KEM backend detected")]
 
+        results: list[CheckResult] = []
         for name, kem in registry.kems.items():
             try:
                 public_key, secret_key = kem.keypair()
@@ -86,10 +113,10 @@ class CryptoOperationSuite:
         return results
 
     def pq_signature_tests(self, registry: PQRegistry) -> list[CheckResult]:
-        results: list[CheckResult] = []
         if not registry.signatures:
             return [CheckResult("pq_signature", "SKIP", "no PQ signature backend detected")]
 
+        results: list[CheckResult] = []
         msg = b"quantum-resistant tls selftest"
         for name, sig in registry.signatures.items():
             try:

@@ -9,10 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import importlib
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
 
-=======
->>>>>>> main
 from ..base import AlgorithmSpec
 
 
@@ -44,22 +41,11 @@ class PqcryptoSignature:
         return self._mod.sign(secret_key, message)
 
     def verify(self, public_key: bytes, message: bytes, signature: bytes) -> bool:
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
-        # Fixed API contract for pqcrypto signature modules.
-        result = self._mod.verify(signature, message, public_key)
-        return True if result is None else bool(result)
-=======
-        # Some pqcrypto variants expose verify(pk, msg, sig), others verify(sig, msg, pk)
         try:
-            self._mod.verify(public_key, message, signature)
+            self._mod.verify(signature, message, public_key)
             return True
-        except Exception:
-            try:
-                self._mod.verify(signature, message, public_key)
-                return True
-            except Exception:
-                return False
->>>>>>> main
+        except ValueError:
+            return False
 
 
 def _load_first(paths: list[str]) -> object | None:
