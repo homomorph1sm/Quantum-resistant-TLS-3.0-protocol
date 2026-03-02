@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import logging
 import ssl
-
-LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -38,24 +35,16 @@ def build_server_context(config: TLSServerConfig) -> ssl.SSLContext:
     if config.cafile:
         context.load_verify_locations(cafile=config.cafile)
 
-    if config.require_client_cert:
-        context.verify_mode = ssl.CERT_REQUIRED
-    elif config.cafile:
-        context.verify_mode = ssl.CERT_OPTIONAL
-    else:
-        context.verify_mode = ssl.CERT_NONE
-
+    context.verify_mode = ssl.CERT_REQUIRED if config.require_client_cert else ssl.CERT_NONE
     context.options |= ssl.OP_NO_COMPRESSION
     return context
 
 
 def build_client_context(config: TLSClientConfig) -> ssl.SSLContext:
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=config.cafile)
-
     if config.insecure:
-        LOGGER.warning("TLS certificate verification is disabled (--insecure). Do not use in production.")
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
+        context = ssl._create_unverified_context()
+    else:
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=config.cafile)
 
     if config.certfile:
         context.load_cert_chain(certfile=config.certfile, keyfile=config.keyfile)
