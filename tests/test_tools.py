@@ -26,7 +26,7 @@ def test_reject_invalid_dn_and_san(tmp_path: Path) -> None:
 def test_verify_certificate_detects_tampering(tmp_path: Path) -> None:
     mgr = CertificateLifecycleManager(tmp_path)
     ca_key, ca_cert = mgr.initialize_ca()
-    _, _, cert = mgr.issue_leaf("localhost", "DNS:localhost,IP:127.0.0.1", ca_key, ca_cert)
+    _, _, cert = mgr.issue_leaf("localhost", "DNS:localhost", ca_key, ca_cert)
     cert.write_text(cert.read_text(encoding="utf-8") + "tamper", encoding="utf-8")
 
     with pytest.raises(CertificateLifecycleError):

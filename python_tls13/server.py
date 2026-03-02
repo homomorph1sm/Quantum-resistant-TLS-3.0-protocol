@@ -13,11 +13,6 @@ from typing import Tuple
 
 def validate_private_key_permissions(path: str) -> None:
     """Reject private keys that are group/world accessible."""
-    if os.name == "nt":
-        # Windows ACLs do not map cleanly to POSIX mode bits; strict 0400/0600
-        # checks can produce false positives (for example 0o666 from os.stat).
-        return
-
     mode = stat.S_IMODE(os.stat(path).st_mode)
     if mode not in (0o400, 0o600):
         raise PermissionError(
