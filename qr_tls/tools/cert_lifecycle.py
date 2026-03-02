@@ -41,6 +41,7 @@ class CertificateLifecycleManager:
     def __init__(self, workdir: Path) -> None:
         self.workdir = workdir
         self.workdir.mkdir(parents=True, exist_ok=True)
+        self._fixtures = Path(__file__).with_name("testdata")
 
     @staticmethod
     def _validate_cn(value: str) -> None:
