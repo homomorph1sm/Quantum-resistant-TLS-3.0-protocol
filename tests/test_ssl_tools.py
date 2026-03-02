@@ -1,6 +1,5 @@
 import ssl
 
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
 import pytest
 
 from qr_tls.ssl_tools import TLSClientConfig, TLSServerConfig, build_client_context, build_server_context
@@ -11,22 +10,12 @@ def test_build_client_context_tls13() -> None:
     assert ctx.minimum_version == ssl.TLSVersion.TLSv1_3
     assert ctx.maximum_version == ssl.TLSVersion.TLSv1_3
     assert ctx.verify_mode == ssl.CERT_REQUIRED
-=======
-from qr_tls.ssl_tools import TLSClientConfig, TLSServerConfig, build_client_context
-
-
-def test_build_client_context_tls13() -> None:
-    ctx = build_client_context(TLSClientConfig(insecure=True))
-    assert ctx.minimum_version == ssl.TLSVersion.TLSv1_3
-    assert ctx.maximum_version == ssl.TLSVersion.TLSv1_3
->>>>>>> main
 
 
 def test_server_config_defaults() -> None:
     cfg = TLSServerConfig(certfile="a", keyfile="b")
     assert cfg.require_client_cert is False
     assert cfg.minimum_version == ssl.TLSVersion.TLSv1_3
-<<<<<<< codex/add-python-implementation-of-tls-3.0-ruoswh
 
 
 def test_server_with_cafile_uses_cert_optional(monkeypatch) -> None:
@@ -35,6 +24,8 @@ def test_server_with_cafile_uses_cert_optional(monkeypatch) -> None:
             self.protocol = protocol
             self.verify_mode = None
             self.options = 0
+            self.minimum_version = None
+            self.maximum_version = None
 
         def load_cert_chain(self, certfile: str, keyfile: str) -> None:
             pass
@@ -55,5 +46,3 @@ def test_client_cert_key_must_be_pair() -> None:
 def test_server_require_client_cert_needs_cafile() -> None:
     with pytest.raises(ValueError):
         build_server_context(TLSServerConfig(certfile="a.pem", keyfile="b.pem", require_client_cert=True))
-=======
->>>>>>> main
